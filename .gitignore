@@ -1,0 +1,5 @@
+.env
+__pycache__/
+services/__pycache__/
+.vscode/
+chat_history.db
