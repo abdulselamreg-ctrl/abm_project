@@ -1,5 +1,4 @@
 .env
 __pycache__/
-services/__pycache__/
-.vscode/
+*.pyc
 chat_history.db

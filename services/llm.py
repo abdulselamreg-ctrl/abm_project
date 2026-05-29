@@ -18,7 +18,7 @@ API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
 DEFAULT_MODEL = os.getenv("NVIDIA_NIM_DEFAULT_MODEL", "openai/gpt-oss-120b")
 
 AVAILABLE_MODELS = [
-    "meta/llama-4-maverick",
+     "openai/gpt-oss-120b",
     "minimax/minimax-m2.7",
     "mistralai/mistral-nemotron",
     "qwen/qwen3-coder-480b-a35b-instruct",
@@ -31,7 +31,6 @@ AVAILABLE_MODELS = [
     "mistralai/mistral-large-3.1-675b-instruct",
     "deepseek-ai/deepseek-r1",
     "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-    "openai/gpt-oss-120b",
     "qwen/qwen2.5-72b-instruct",
     "meta/llama-3.1-70b-instruct",
     "deepseek-ai/deepseek-r1-distill-qwen-32b",

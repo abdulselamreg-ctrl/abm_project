@@ -1,17 +1,16 @@
 from typing import Optional, List
 import sqlite3
-from contextlib import closing
+from contextlib import closing, asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
-# ─── Safe import of LLM functions ───
+# ─── Safe import of LLM functions ─────────────────────────────────────
 try:
     from services.llm import get_llm_reply, stream_llm_reply, get_available_models
 except ImportError as e:
-    # If import fails, provide dummy functions so server can start
     import logging
     logging.basicConfig(level=logging.WARNING)
     logger = logging.getLogger("server")
@@ -29,26 +28,7 @@ except ImportError as e:
 DB_PATH = "chat_history.db"
 MAX_HISTORY_FOR_MODEL = 6
 
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class ChatRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    message: str
-    model: Optional[str] = None
-    conversation_id: Optional[int] = None
-    title: Optional[str] = None
-    memory: bool = True
-
-class CreateConversationRequest(BaseModel):
-    title: Optional[str] = None
-
-# ─── Database helpers (unchanged) ───
+# ─── Database helpers ──────────────────────────────────────────────────
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -78,10 +58,31 @@ def create_tables():
         """)
         conn.commit()
 
-@app.on_event("startup")
-def startup():
+# ─── Lifespan context manager (replaces deprecated @app.on_event) ──────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     create_tables()
+    yield
 
+app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    message: str
+    model: Optional[str] = None
+    conversation_id: Optional[int] = None
+    title: Optional[str] = None
+    memory: bool = True
+
+class CreateConversationRequest(BaseModel):
+    title: Optional[str] = None
+
+# ─── Conversation helpers ──────────────────────────────────────────────
 def row_to_conversation(row):
     return {
         "id": row["id"],
@@ -161,7 +162,7 @@ def get_recent_history_for_model(conversation_id: int, limit: int = MAX_HISTORY_
     msgs = get_conversation_messages(conversation_id, limit=limit)
     return [ChatMessage(role=m["role"], content=m["content"]) for m in msgs]
 
-# ─── Endpoints ───
+# ─── Endpoints ─────────────────────────────────────────────────────────
 @app.get("/")
 def home():
     return FileResponse("frontend/index.html")
@@ -281,8 +282,11 @@ async def chat_stream(request: ChatRequest):
                 model_name=request.model,
                 history=history,
             ):
+                # Keep the original token (with real newlines) for the database
                 full_reply += token
-                yield f"data: {token}\n\n"
+                # Escape newlines for the SSE stream so data lines are not broken
+                safe_token = token.replace("\n", "\\n")
+                yield f"data: {safe_token}\n\n"
         except Exception as e:
             yield f"data: Error: {str(e)}\n\n"
         finally:
